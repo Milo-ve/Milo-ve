@@ -58,7 +58,7 @@ def fetch_stats() -> dict[str, str]:
     u = gh_graphql(
         'query{user(login:"%s"){createdAt repositories(ownerAffiliations:OWNER)'
         "{totalCount} contributionsCollection{totalCommitContributions "
-        "restrictedContributionsCount totalPullRequestContributions}}}" % USER
+        "restrictedContributionsCount}}}" % USER
     )
     # `user` key is unwrapped by gh_graphql
     created = datetime.fromisoformat(u["createdAt"].replace("Z", "+00:00"))
@@ -75,7 +75,6 @@ def fetch_stats() -> dict[str, str]:
         "Uptime": f"{months // 12} years, {months % 12} months, {day} days",
         "Repos": str(u["repositories"]["totalCount"]),
         "Commits": f"{commits} (12 mo)",
-        "PRs": str(cc["totalPullRequestContributions"]),
     }
 
 
@@ -159,7 +158,7 @@ def build(theme: str, c: dict[str, str], stats: dict[str, str]) -> str:
                        f'<tspan fill="{c["dot"]}">{d}</tspan><tspan fill="{c["val"]}">{escape(v)}</tspan></text>')
         elif kind == "stats":
             s = p
-            segs = [("Repos", s["Repos"]), ("Commits", s["Commits"]), ("PRs", s["PRs"])]
+            segs = [("Repos", s["Repos"]), ("Commits", s["Commits"])]
             parts = []
             for i, (k, v) in enumerate(segs):
                 sep = f'<tspan fill="{c["fg"]}"> | </tspan>' if i else ""
