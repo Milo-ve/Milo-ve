@@ -1,0 +1,6 @@
+# Never commit source photos; only the generated art.txt / SVGs
+*.jpg
+*.jpeg
+*.png
+*.heic
+__pycache__/
