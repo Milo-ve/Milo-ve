@@ -10,10 +10,8 @@ Edit the PROFILE dict below for the static lines.
 """
 from __future__ import annotations
 
-import calendar
 import json
 import subprocess
-from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 
@@ -22,6 +20,7 @@ WIDTH = 62  # characters per info line (monospace alignment)
 
 # A list value is rendered on several lines (long values must fit in WIDTH).
 PROFILE: dict[str, str | list[str]] = {
+    "Building since": "Jul 2026",  # when real activity started, not account age
     "Host": "Vravura",
     "Kernel": "Relay Method (REF v1)",
     "IDE": "VS Code + Claude Code",
@@ -56,21 +55,13 @@ def gh_graphql(query: str) -> dict:
 def fetch_stats() -> dict[str, str]:
     # Only aggregates are rendered: no repository names, no code.
     u = gh_graphql(
-        'query{user(login:"%s"){createdAt '
+        'query{user(login:"%s"){'
         "contributionsCollection{contributionCalendar{totalContributions "
         "weeks{contributionDays{contributionCount}}}} "
         "repositories(ownerAffiliations:OWNER,first:100){nodes{isFork "
         "languages(first:8,orderBy:{field:SIZE,direction:DESC}){edges{size node{name}}}}}}}" % USER
     )
     # `user` key is unwrapped by gh_graphql
-    created = datetime.fromisoformat(u["createdAt"].replace("Z", "+00:00"))
-    now = datetime.now(timezone.utc)
-    months = (now.year - created.year) * 12 + now.month - created.month
-    day = now.day - created.day
-    if day < 0:
-        months -= 1
-        prev_year, prev_month = (now.year, now.month - 1) if now.month > 1 else (now.year - 1, 12)
-        day += calendar.monthrange(prev_year, prev_month)[1]
     cal = u["contributionsCollection"]["contributionCalendar"]
     days = [d["contributionCount"] for w in cal["weeks"] for d in w["contributionDays"]]
     # Language mix over every non-fork repo you own, private ones included.
@@ -83,7 +74,6 @@ def fetch_stats() -> dict[str, str]:
     total = sum(sizes.values()) or 1
     top = sorted(sizes.items(), key=lambda kv: kv[1], reverse=True)[:3]
     return {
-        "Uptime": f"{months // 12} years, {months % 12} months, {day} days",
         "Contributions": f"{cal['totalContributions']} (12 mo)",
         "Recent": f"{sum(days[-90:])} (90 d)",
         "Languages": ", ".join(f"{n} {round(s * 100 / total)}%" for n, s in top),
@@ -122,8 +112,7 @@ def build(theme: str, c: dict[str, str], stats: dict[str, str]) -> str:
         for i, part in enumerate([value] if isinstance(value, str) else value):
             lines.append(("kv", (key if i == 0 else "", part)))
 
-    lines.append(("kv", ("Uptime", stats["Uptime"])))
-    for k in ("Host", "Kernel", "IDE"):
+    for k in ("Building since", "Host", "Kernel", "IDE"):
         add_kv(k)
     lines.append(("gap", ""))
     lines.append(("kv", ("Languages.Programming", stats["Languages"])))
