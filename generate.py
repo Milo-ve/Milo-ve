@@ -20,8 +20,8 @@ from pathlib import Path
 USER = "Milo-ve"
 WIDTH = 62  # characters per info line (monospace alignment)
 
-PROFILE: dict[str, str] = {
-    "OS": "macOS",
+# A list value is rendered on several lines (long values must fit in WIDTH).
+PROFILE: dict[str, str | list[str]] = {
     "Host": "Vravura",
     "Kernel": "Relay Method (REF v1)",
     "IDE": "VS Code + Claude Code",
@@ -29,7 +29,7 @@ PROFILE: dict[str, str] = {
     "Languages.Computer": "HTML, CSS, JSON, YAML",
     "Languages.Real": "Spanish, English, Chinese (basic)",
     "Focus.Building": "AI-assisted workflows, web products",
-    "Focus.Domains": "Health-tech, event operations",
+    "Focus.Domains": ["Innovation, strategy, financial services,", "age-tech and health-tech"],
     "Email": "milo@vravura.com",
 }
 
@@ -106,17 +106,22 @@ def build(theme: str, c: dict[str, str], stats: dict[str, str]) -> str:
     x_txt = int(x_art + art_cols * art_fs * 0.602 + 30)
     lines: list[str] = []  # (kind, payload)
     lines.append(("title", "milo@github " + "-" * (WIDTH - len("milo@github "))))
-    for k in ("OS", "Host", "Kernel", "IDE"):
-        lines.append(("kv", (k, PROFILE[k])))
-    lines.insert(2, ("kv", ("Uptime", stats["Uptime"])))
+    def add_kv(key: str) -> None:
+        value = PROFILE[key]
+        for i, part in enumerate([value] if isinstance(value, str) else value):
+            lines.append(("kv", (key if i == 0 else "", part)))
+
+    lines.append(("kv", ("Uptime", stats["Uptime"])))
+    for k in ("Host", "Kernel", "IDE"):
+        add_kv(k)
     lines.append(("gap", ""))
     for k in ("Languages.Programming", "Languages.Computer", "Languages.Real"):
-        lines.append(("kv", (k, PROFILE[k])))
+        add_kv(k)
     lines.append(("gap", ""))
     for k in ("Focus.Building", "Focus.Domains"):
-        lines.append(("kv", (k, PROFILE[k])))
+        add_kv(k)
     lines.append(("section", "Contact"))
-    lines.append(("kv", ("Email", PROFILE["Email"])))
+    add_kv("Email")
     lines.append(("section", "GitHub Stats"))
     lines.append(("stats", stats))
 
