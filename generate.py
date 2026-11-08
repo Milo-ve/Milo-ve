@@ -25,7 +25,6 @@ PROFILE: dict[str, str | list[str]] = {
     "Host": "Vravura",
     "Kernel": "Relay Method (REF v1)",
     "IDE": "VS Code + Claude Code",
-    "Languages.Programming": "TypeScript, Python, Astro",
     "Languages.Computer": "HTML, CSS, JSON, YAML",
     "Languages.Real": "Spanish, English, Chinese (basic)",
     "Focus.Building": "AI-assisted workflows, web products",
@@ -55,10 +54,13 @@ def gh_graphql(query: str) -> dict:
 
 
 def fetch_stats() -> dict[str, str]:
+    # Only aggregates are rendered: no repository names, no code.
     u = gh_graphql(
-        'query{user(login:"%s"){createdAt repositories(ownerAffiliations:OWNER)'
-        "{totalCount} contributionsCollection{totalCommitContributions "
-        "restrictedContributionsCount}}}" % USER
+        'query{user(login:"%s"){createdAt '
+        "contributionsCollection{contributionCalendar{totalContributions "
+        "weeks{contributionDays{contributionCount}}}} "
+        "repositories(ownerAffiliations:OWNER,first:100){nodes{isFork "
+        "languages(first:8,orderBy:{field:SIZE,direction:DESC}){edges{size node{name}}}}}}}" % USER
     )
     # `user` key is unwrapped by gh_graphql
     created = datetime.fromisoformat(u["createdAt"].replace("Z", "+00:00"))
@@ -69,12 +71,22 @@ def fetch_stats() -> dict[str, str]:
         months -= 1
         prev_year, prev_month = (now.year, now.month - 1) if now.month > 1 else (now.year - 1, 12)
         day += calendar.monthrange(prev_year, prev_month)[1]
-    cc = u["contributionsCollection"]
-    commits = cc["totalCommitContributions"] + cc["restrictedContributionsCount"]
+    cal = u["contributionsCollection"]["contributionCalendar"]
+    days = [d["contributionCount"] for w in cal["weeks"] for d in w["contributionDays"]]
+    # Language mix over every non-fork repo you own, private ones included.
+    sizes: dict[str, int] = {}
+    for repo in u["repositories"]["nodes"]:
+        if repo["isFork"]:
+            continue
+        for e in repo["languages"]["edges"]:
+            sizes[e["node"]["name"]] = sizes.get(e["node"]["name"], 0) + e["size"]
+    total = sum(sizes.values()) or 1
+    top = sorted(sizes.items(), key=lambda kv: kv[1], reverse=True)[:3]
     return {
         "Uptime": f"{months // 12} years, {months % 12} months, {day} days",
-        "Repos": str(u["repositories"]["totalCount"]),
-        "Commits": f"{commits} (12 mo)",
+        "Contributions": f"{cal['totalContributions']} (12 mo)",
+        "Recent": f"{sum(days[-90:])} (90 d)",
+        "Languages": ", ".join(f"{n} {round(s * 100 / total)}%" for n, s in top),
     }
 
 
@@ -114,7 +126,8 @@ def build(theme: str, c: dict[str, str], stats: dict[str, str]) -> str:
     for k in ("Host", "Kernel", "IDE"):
         add_kv(k)
     lines.append(("gap", ""))
-    for k in ("Languages.Programming", "Languages.Computer", "Languages.Real"):
+    lines.append(("kv", ("Languages.Programming", stats["Languages"])))
+    for k in ("Languages.Computer", "Languages.Real"):
         add_kv(k)
     lines.append(("gap", ""))
     for k in ("Focus.Building", "Focus.Domains"):
@@ -158,7 +171,7 @@ def build(theme: str, c: dict[str, str], stats: dict[str, str]) -> str:
                        f'<tspan fill="{c["dot"]}">{d}</tspan><tspan fill="{c["val"]}">{escape(v)}</tspan></text>')
         elif kind == "stats":
             s = p
-            segs = [("Repos", s["Repos"]), ("Commits", s["Commits"])]
+            segs = [("Contributions", s["Contributions"]), ("Recent", s["Recent"])]
             parts = []
             for i, (k, v) in enumerate(segs):
                 sep = f'<tspan fill="{c["fg"]}"> | </tspan>' if i else ""
